@@ -1,7 +1,6 @@
 import pygame
 from pieces import Pawn, Rook, Queen, Bishop, Knight, King
 from methods import is_check
-
 import sys
 
 
@@ -399,6 +398,3 @@ def game_loop():
     # Quit pygame when done
     pygame.quit()
     sys.exit()
-
-# Start the game loop
-game_loop()
