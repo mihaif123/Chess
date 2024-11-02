@@ -34,6 +34,9 @@ def quick_check(darkKing,whiteKing,board,dx,dy,xi,yi,self):
             if piece:
                 if piece.getColor() == self.getColor():
                     break
+                else:
+                    legal_moves.append((ax,ay))
+                    break
             
             aux = board[ax][ay]
             board[ax][ay] = board[xi][yi]

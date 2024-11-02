@@ -15,11 +15,15 @@ GREEN = (0, 150, 0)
 BLUE = (0, 0, 200)
 RED = (255, 0, 0)
 YELLOW = (255,255,0)
+LIGHT_BROWN = (181,101,29)
+BIRCH = (222,212,184)
 WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 800
 SQUARE_SIZE = 70
 BOARD_X = 100
 BOARD_Y = 50
+
+dotimg = pygame.image.load("chessimgs\dot.png")
 
 knightimg = pygame.image.load("chessimgs\LightKnight.png")
 bishopimg = pygame.image.load("chessimgs\LightBishop.png")
@@ -209,16 +213,16 @@ def game_loop():
         for i in range(8):
             for j in range(4):
                 if alternate == True :
-                    pygame.draw.rect(screen, GREEN, (square_x,square_y,square_size,square_size))
+                    pygame.draw.rect(screen, LIGHT_BROWN, (square_x,square_y,square_size,square_size))
                     square_x += square_size
                     j = j + 1
-                    pygame.draw.rect(screen, BLUE,(square_x,square_y,square_size,square_size))
+                    pygame.draw.rect(screen, BIRCH,(square_x,square_y,square_size,square_size))
                     square_x += square_size
                 else:
-                    pygame.draw.rect(screen, BLUE, (square_x,square_y,square_size,square_size))
+                    pygame.draw.rect(screen, BIRCH, (square_x,square_y,square_size,square_size))
                     square_x += square_size
                     j = j + 1
-                    pygame.draw.rect(screen, GREEN,(square_x,square_y,square_size,square_size))
+                    pygame.draw.rect(screen, LIGHT_BROWN,(square_x,square_y,square_size,square_size))
                     square_x += square_size
             square_y += square_size
             square_x = BOARD_X
@@ -250,6 +254,16 @@ def game_loop():
         if(selected):
             select_rect = (BOARD_X + selected_piece[1] * square_size, BOARD_Y + selected_piece[2] * square_size,square_size,square_size)
             pygame.draw.rect(screen,(0,255,0,50),select_rect, 2)
+            legal, moves = selected_piece[0].has_legal_move(selected_piece[1],selected_piece[2],darkKing,whiteKing,board,last_move)
+            img = dotimg
+            image_rect = img.get_rect()
+            (x, y) = (BOARD_X, BOARD_Y)
+            for move in moves:
+                image_rect.topleft =(x + move[0] * square_size, y + move[1] * square_size)
+                screen.blit(img,image_rect)
+                
+
+
 
         
         if event and event.type == pygame.MOUSEBUTTONUP:
