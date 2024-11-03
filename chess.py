@@ -4,9 +4,6 @@ from methods import is_check
 import sys
 
 
-# Initialize Pygame
-pygame.init()
-
 # Define constants
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -141,6 +138,10 @@ def get_img(black, id):
 
 # Game loop
 def game_loop():
+
+
+    pygame.init()
+
     clock = pygame.time.Clock()
     running = True
     ok = True

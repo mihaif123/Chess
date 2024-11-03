@@ -3,8 +3,12 @@ import pygame
 import sys
 import sqlite3
 import time
+import socket
+import threading
 
 from chess import game_loop
+
+pygame.init()
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -25,6 +29,7 @@ login_button_rect = pygame.Rect((WINDOW_WIDTH//2 - button_width//2, 250), (butto
 quit_button_rect = pygame.Rect((WINDOW_WIDTH//2 - button_width//2, 450), (button_width, button_height))
 
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+logged = False
 
 
 
@@ -69,7 +74,18 @@ def register_db(user,password):
     cursor.close()
     conn.close()
 
+
+def all_users():
+    conn =sqlite3.connect('players.db')
+    cursor = conn.cursor()
+    cursor.execute('select * from players')
+
+    result = cursor.fetchall()
+    for row in result:
+        print(row)
+
 def register_menu():
+    all_users()
     screen.fill(BIRCH)
     title_text = font.render("REGISTER", True, LIGHT_BROWN)
     username = button_font.render("Username: ", True, LIGHT_BROWN)
@@ -165,7 +181,29 @@ def login_db(user,password):
         else:
             return -1,-1 # wrong pass
 
+queue_event = threading.Event()
+
+def in_queue(client):
+    global logged
+    client.settimeout(1.0)
+    while queue_event.is_set():
+        try:
+            message = client.recv(1024).decode()
+            if message.startswith("START"):
+                parts = message.split(" ")
+                color = parts[1]
+                logged = False
+                client.send("STARTING".encode())
+                queue_event.clear()
+                #game_loop()
+                print(f"game starts with {color}")
+        except socket.timeout:
+            pass
+
+in_queue_thread = None
+
 def logged_in(user,rating):
+    global logged
     screen.fill(BIRCH)
     pygame.draw.rect(screen,LIGHT_BROWN,((0,0),(WINDOW_WIDTH,50)))
 
@@ -185,10 +223,18 @@ def logged_in(user,rating):
     screen.blit(rating_title, (670, 20, 40, 50))
     screen.blit(rating_text,(750, 20 , 40 , 50))
 
-
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect(('127.0.0.1',9999))
+    send_message = f"FIRST:{user} {str(rating)}"
+    client.send(send_message.encode())
+    message = client.recv(1024).decode()
+    print(message)
+    if(message.__eq__("cc")):
+        logged = False
+    else:
+        logged = True
     finding_match = False
     start_time = 0
-    logged = True
     while logged:
         if finding_match:
             pygame.draw.rect(screen,BIRCH,(740,60, 50,50))
@@ -205,22 +251,38 @@ def logged_in(user,rating):
         draw_button("Cancel" , cancel_button,cancel_button.collidepoint(mouse_pos))
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                if finding_match:
+                    client.send("CANCEL".encode())
+                client.send("QUIT".encode())
                 pygame.quit()
-                sys.quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if find_match_button.collidepoint(mouse_pos):
-                    if(not finding_match):
-                        finding_match = True
-                        start_time = time.time()
-                    #connect to server to find player ?? ----------------------------------------------------------------------------------------------
+                if find_match_button.collidepoint(mouse_pos) and not finding_match:
+                    
+                    finding_match = True
+                    start_time = time.time()
+                    queue_event.set()
+
+                    in_queue_thread = threading.Thread(target=in_queue,args= (client, ))
+                    in_queue_thread.start()
+                    
+                    client.send("QUEUE".encode())
+                
 
                 if cancel_button.collidepoint(mouse_pos):
                     if(finding_match):
                         finding_match = False
-                        pygame.draw.rect(screen,BIRCH,(600,60,200,50))
+                        queue_event.clear()
+                        client.send('CANCEL'.encode())
+                        pygame.draw.rect(screen,BIRCH,(600,60,200,50))                
                 
 
+
         pygame.display.flip()
+    
+    if in_queue_thread is not None:
+        in_queue_thread.join()
+
 
 
 
