@@ -1,6 +1,7 @@
 import socket
 import threading
 import sqlite3
+import select
 import random
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -19,6 +20,7 @@ def input_thread():
         user_input = input(">")
         if user_input.lower() == "exit":
             stop_event.set()
+            game_event.set()
             server.close()
         if user_input.lower() == "showq":
             print("Users_queue:", users_queue)
@@ -52,7 +54,74 @@ def showdb():
     cursor.close()
     conn.close()
 
+def is_empty(myList):
+    return len(myList) == 0
 
+game_event = threading.Event()
+
+def game(player1,player2):
+
+    socket_obj1, (user1, rating1, player1addr) = player1
+    socket_obj2, (user2, rating2, player2addr) = player2
+
+    socket_obj1.setblocking(False)
+    socket_obj2.setblocking(False)
+    while not game_event.is_set():
+        #print("reading")
+        try:
+            message1 = socket_obj1.recv(1024).decode()
+            messages = message1.split("\n")
+            for msg in messages:
+                if msg.startswith('WIN'):
+                    set_rating(player1[1][0],int(player1[1][1]) + 8)
+                    set_rating(player2[1][0],int(player2[1][1]) - 8)
+                    break
+                elif msg.startswith('DRAW'):
+                    break
+                elif msg.startswith('LOSS'):
+                    break
+                else:
+                    socket_obj2.send(msg.encode())
+                    socket_obj1.send('message received'.encode())
+        except BlockingIOError:
+            pass
+        except ConnectionAbortedError:
+            print("broke connection1")
+            del clients[socket_obj1]
+            del clients[socket_obj2]
+            break
+        except ConnectionResetError:
+            print("broke connection2")
+            del clients[socket_obj1]
+            del clients[socket_obj2]
+            break
+        try:
+            message2 = socket_obj2.recv(1024).decode()
+            messages = message2.split("\n")
+            for msg in messages:
+                if msg.startswith('WIN'):
+                    set_rating(player2[1][0],int(player2[1][1]) + 8)
+                    set_rating(player1[1][0],int(player1[1][1]) - 8)
+                    break
+                elif msg.startswith('DRAW'):
+                    break
+                elif msg.startswith('LOSS'):
+                    break
+                else:
+                    socket_obj1.send(msg.encode())
+                    socket_obj2.send('message received'.encode())
+        except BlockingIOError:
+            pass
+        except ConnectionAbortedError:
+            print("broke connection1")
+            del clients[socket_obj1]
+            del clients[socket_obj2]
+            break
+        except ConnectionResetError:
+            print("broke connection2")
+            del clients[socket_obj1]
+            del clients[socket_obj2]
+            break
 def in_queue():
     global queue_active
     global users_queue
@@ -86,8 +155,11 @@ def in_queue():
                     if random_choice == "BLACK":
                         other = "WHITE"
 
-                    player1[0].sendto(f"START {random_choice}".encode(),player1[1][2])
-                    player2[0].sendto(f"START {other}".encode(),player2[1][2])
+                    player1[0].sendto(f"START {random_choice} {player2[1][0]} {player2[1][1]}".encode(),player1[1][2])
+                    player2[0].sendto(f"START {other} {player1[1][0]} {player1[1][1]}".encode(),player2[1][2])
+
+                    game_thread = threading.Thread(target=game, args=(player1,player2))
+                    game_thread.start()
                             
 inqueue_listener = threading.Thread(target=in_queue)
 inqueue_listener.start()
@@ -96,12 +168,17 @@ def handle_buttons(client):
     global queue_active
     
     while not stop_event.is_set():
+
         msg = ' '
         client.settimeout(1.0)
         try:
             msg = client.recv(1024).decode()
         except socket.timeout:
             pass
+        except ConnectionAbortedError:
+            users_queue.remove(clients[client])
+        except ConnectionResetError:
+            users_queue.remove(clients[client])
 
         if msg.startswith("QUEUE"):
             print(f"{clients[client][0]} is now in queue...")
@@ -112,6 +189,7 @@ def handle_buttons(client):
         elif msg.startswith("CANCEL"):
             users_queue.remove(clients[client])
         elif msg.startswith("QUIT"):
+            users_queue.remove(clients[client])
             del clients[client]
         elif msg.startswith("STARTING"):
             break
@@ -127,12 +205,17 @@ def handle_client(client,addr):
         ur = parts[1].split(" ")
         user = ur[0]
         rating = ur[1]
-       
-        if (user,rating) in clients.values():
-            client.sendto("cc".encode(),addr)
-            return
-        else:
-            client.sendto("loggedin".encode(),addr)
+    
+        values = clients.values()
+
+        values = list(values)
+
+        for value in values:
+            if user in value[0]:
+                client.sendto("cc".encode(),addr)
+                return
+        
+        client.sendto("loggedin".encode(),addr)
         clients[client] = (user,rating,addr)
 
     handle_thread = threading.Thread(target=handle_buttons, args=(client,))

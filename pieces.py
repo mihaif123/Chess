@@ -27,12 +27,19 @@ class Piece(ABC):
     @abstractmethod
     def has_legal_move(self,xi,yi,darkKing,whiteKing,board):
         pass
+    @abstractmethod
+    def getShortName(self):
+        pass
 
 
     def getColor(self):
         return self.black
             
 class Knight(Piece):
+
+    def getShortName(self):
+        return "N"
+
 
     def has_legal_move(self, xi, yi,darkKing,whiteKing, board,last_move):
         
@@ -80,17 +87,12 @@ class Knight(Piece):
         if not has or (x,y) not in legal_moves:
             return (None, None ,None, False)
         
-        moved = False
-        
-    
         board[x][y] = board[xi][yi]
         board[xi][yi] = None
 
-        moved = True
-
         print(self.__class__.__name__, " moves from ", xi, yi, " to " , x , y)   
 
-        last_move = (self, x, y, moved)
+        last_move = (self, x, y, True)
         return last_move
 
     def can_attack(self, xi,yi,xk, yk, board):
@@ -107,6 +109,9 @@ class Knight(Piece):
         return (self.black, 3)
 
 class Bishop(Piece):
+
+    def getShortName(self):
+        return "B"
 
     def has_legal_move(self, xi, yi,darkKing,whiteKing, board,last_move):
         
@@ -138,6 +143,10 @@ class Bishop(Piece):
         return((self.black,2))
 
 class Rook(Piece):
+
+    def getShortName(self):
+        return "R"
+
     def __init__(self, color):
         super().__init__(color)
         self.firstMove = True
@@ -172,6 +181,10 @@ class Rook(Piece):
     def draw(self):
         return((self.black,4))
 class King(Piece):
+
+
+    def getShortName(self):
+        return "K"
 
     def __init__(self, xk,yk,color):
         super().__init__(color)
@@ -219,15 +232,26 @@ class King(Piece):
         if self.firstMove == True:
             #king side castle
             if board[xi + 1][yi] == None and board[xi + 2][yi] == None:
+                ok = True
+                for ii in range(8):
+                    for jj in range(8):
+                        p = board[ii][jj]
+                        if p and p.getColor() != self.black:
+                            if p.can_attack(ii, jj, xi + 1, yi,board) or p.can_attack(ii, jj , xi + 2,  yi, board):
+                                ok = False
+
+
+
                 rook = board[xi + 3][yi]
-                if rook:
+                
+                if rook and rook.getColor() == self.getColor() and isinstance(rook, Rook):
                     if rook.firstMove == True:
 
                         board[xi + 2][yi] = board[xi][yi]
                         board[xi + 1][yi] = board[xi + 3][yi]
                         board[xi][yi] = None
                         board[xi + 3][yi] = None
-                        if not is_check(self,board):
+                        if not is_check(self,board) and ok:
                             legal_moves.append((xi + 2,yi))
 
                         board[xi][yi] = board[xi + 2][yi]
@@ -236,15 +260,24 @@ class King(Piece):
                         board[xi + 1][yi] = None
             #queen side castle
             if board[xi - 1][yi] == None and board[xi - 2][yi] == None and board[xi - 3][yi] == None:
+
+                ok = True
+                for ii in range(8):
+                    for jj in range(8):
+                        p = board[ii][jj]
+                        if p and p.getColor() != self.black:
+                            if p.can_attack(ii, jj, xi - 1, yi,board) or p.can_attack(ii, jj , xi - 2,  yi, board) or p.can_attack(ii, jj, xi - 3, yi, board):
+                                ok = False
+
                 rook = board[xi - 4][yi]
-                if rook:
+                if rook and rook.getColor() == self.getColor() and isinstance(rook, Rook):
                     if rook.firstMove == True:
                         
                         board[xi - 2][yi] = board[xi][yi]
                         board[xi - 1][yi] = board[xi - 4][yi]
                         board[xi][yi] = None
                         board[xi - 4][yi] = None
-                        if not is_check(self,board):
+                        if not is_check(self,board) and ok:
                             legal_moves.append((xi - 2, yi))
                         board[xi][yi] = board[xi - 2][yi]
                         board[xi - 4][yi] = board[xi - 1][yi]
@@ -271,8 +304,6 @@ class King(Piece):
             return (None, None ,None, False)
                 
         self.pos = (xi,yi)
-
-        moved = False
 
         if xi == x + 1 or xi == x - 1 or xi == x:
             if yi == y - 1 or yi == y + 1 or yi == y:
@@ -313,6 +344,10 @@ class King(Piece):
        return ((self.black,0))
 
 class Queen(Piece):
+
+
+    def getShortName(self):
+        return "Q"
 
     def has_legal_move(self, xi, yi,darkKing,whiteKing, board,last_move):
         
@@ -401,6 +436,11 @@ class Queen(Piece):
     def draw(self):
         return ((self.black,5))
 class Pawn(Piece):
+
+
+    def getShortName(self):
+        return "P"
+
     def __init__(self,color):
         super().__init__(color)
         self.firstMove = True
@@ -420,12 +460,18 @@ class Pawn(Piece):
         if self.black:
             movy = 1 
 
-        if last_move:
-            if last_move[1] == xi - 1 or last_move[1] == xi + 1:
-                pawn = last_move[0]
-                if last_move[2] == yi and pawn:
-                    if isinstance(last_move[0],Pawn) and pawn.moved2 == True:
-                        legal_moves.append((last_move[1],last_move[2] + movy))
+        #en passant check
+        if xi > 1:
+            p = board[xi - 1][yi]
+            if p:
+                if isinstance(p, Pawn) and p.getColor() != self.getColor() and p.moved2:
+                    legal_moves.append((xi - 1, yi + movy))
+        if xi < 7:
+            p = board[xi + 1][yi]
+            if p:
+                if isinstance(p, Pawn) and p.getColor() != self.getColor() and p.moved2:
+                    legal_moves.append((xi + 1, yi + movy))
+
                     
         if self.firstMove == True:
             movy = -2
@@ -509,20 +555,32 @@ class Pawn(Piece):
         if not has or (x,y) not in legal_moves:
             return (None, None ,None, False)
 
-        moved = False
-        board[x][y] = board[xi][yi]
-        board[xi][yi] = None
+        movy = -1 
+        if self.black == True:
+            movy = 1
 
-        if last_move:
-            if last_move[1] == xi - 1 or last_move[1] == xi + 1:
-                pawn = last_move[0]
-                if last_move[2] == yi and pawn:
-                    if isinstance(last_move[0],Pawn) and pawn.moved2 == True:
-                        if (self.black == False and last_move[2] == y + 1) or (self.black == True and last_move[2] == y - 1):
-                            board[last_move[1]][last_move[2]] = None
-                            
+        if x == xi - 1 and y == yi + movy:
+            p = board[x][y]
+            if p:
+                board[x][y] = board[xi][yi]
+                board[xi][yi] = None
+            else:
+                board[xi - 1][yi] = None
+                board[x][y] = board[xi][yi]
+                board[xi][yi] = None
+        elif x == xi + 1 and y == yi + movy:
+            p = board[x][y]
+            if p:
+                board[x][y] = board[xi][yi]
+                board[xi][yi] = None
+            else:
+                board[xi + 1][yi] = None
+                board[x][y] = board[xi][yi]
+                board[xi][yi] = None
+        else:
+            board[x][y] = board[xi][yi]
+            board[xi][yi] = None
 
-        moved = True
         self.firstMove = False
         if abs(y - yi) == 2:
             self.moved2 = True
@@ -531,7 +589,7 @@ class Pawn(Piece):
 
 
         print(self.__class__.__name__ ," moves from ", xi,yi, " to ", x ,y)
-        last_move = (self, x, y,moved)
+        last_move = (self, x, y,True)
         return last_move
     
     def draw(self):

@@ -30,7 +30,7 @@ quit_button_rect = pygame.Rect((WINDOW_WIDTH//2 - button_width//2, 450), (button
 
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 logged = False
-
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 
 
@@ -182,28 +182,43 @@ def login_db(user,password):
             return -1,-1 # wrong pass
 
 queue_event = threading.Event()
+in_game = False
+color = None
+opponent = ''
+opponent_rating =''
 
-def in_queue(client):
-    global logged
-    client.settimeout(1.0)
-    while queue_event.is_set():
+def in_queue():
+    global in_game
+    global color
+    global opponent
+    global opponent_rating
+    while not queue_event.is_set():
+        client.settimeout(1.0)
         try:
             message = client.recv(1024).decode()
-            if message.startswith("START"):
-                parts = message.split(" ")
+            if message.startswith('START'):
+                
+                parts = message.split(' ')
                 color = parts[1]
-                logged = False
-                client.send("STARTING".encode())
-                queue_event.clear()
-                #game_loop()
-                print(f"game starts with {color}")
+                opponent = parts[2]
+                opponent_rating = parts[3]
+                print('starting')
+                client.send('STARTING'.encode())
+                queue_event.set()
+                in_game = True
+
         except socket.timeout:
             pass
+    
 
-in_queue_thread = None
 
 def logged_in(user,rating):
     global logged
+    global client
+    global color
+    global in_game
+    global opponent_rating
+    global opponent
     screen.fill(BIRCH)
     pygame.draw.rect(screen,LIGHT_BROWN,((0,0),(WINDOW_WIDTH,50)))
 
@@ -223,12 +238,11 @@ def logged_in(user,rating):
     screen.blit(rating_title, (670, 20, 40, 50))
     screen.blit(rating_text,(750, 20 , 40 , 50))
 
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    
     client.connect(('127.0.0.1',9999))
     send_message = f"FIRST:{user} {str(rating)}"
     client.send(send_message.encode())
     message = client.recv(1024).decode()
-    print(message)
     if(message.__eq__("cc")):
         logged = False
     else:
@@ -236,6 +250,9 @@ def logged_in(user,rating):
     finding_match = False
     start_time = 0
     while logged:
+        if in_game:
+            game_loop(client, color, user,rating ,opponent ,opponent_rating)
+
         if finding_match:
             pygame.draw.rect(screen,BIRCH,(740,60, 50,50))
             screen.blit(time_elapsed_title,(600,60, 50, 50))
@@ -251,8 +268,6 @@ def logged_in(user,rating):
         draw_button("Cancel" , cancel_button,cancel_button.collidepoint(mouse_pos))
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                if finding_match:
-                    client.send("CANCEL".encode())
                 client.send("QUIT".encode())
                 pygame.quit()
                 sys.exit()
@@ -261,26 +276,24 @@ def logged_in(user,rating):
                     
                     finding_match = True
                     start_time = time.time()
-                    queue_event.set()
-
-                    in_queue_thread = threading.Thread(target=in_queue,args= (client, ))
-                    in_queue_thread.start()
-                    
                     client.send("QUEUE".encode())
+                    queue_event.clear()
+                    in_queue_thread = threading.Thread(target=in_queue)
+                    in_queue_thread.start()
                 
 
                 if cancel_button.collidepoint(mouse_pos):
                     if(finding_match):
                         finding_match = False
-                        queue_event.clear()
                         client.send('CANCEL'.encode())
+                        queue_event.set()
                         pygame.draw.rect(screen,BIRCH,(600,60,200,50))                
                 
 
 
         pygame.display.flip()
     
-    if in_queue_thread is not None:
+    if in_queue_thread:
         in_queue_thread.join()
 
 
